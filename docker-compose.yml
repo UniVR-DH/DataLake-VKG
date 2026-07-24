@@ -1,0 +1,105 @@
+services:
+  postgres_db:
+    image: postgis/postgis:15-3.4
+    platform: linux/amd64
+    container_name: postgres-endpoint
+    env_file: .env
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ontop-network
+
+  garage:
+    image: dxflrs/garage:b72b090a097c8ee2711c8fb065d250ed68dcd0bf
+    container_name: garage
+    env_file: .env
+    restart: unless-stopped
+    ports:
+      - "${GARAGE_S3_PORT}:3900"
+      - "${GARAGE_ADMIN_PORT}:3903"
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "node", "id"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - ontop-network
+
+  dremio:
+    image: dremio/dremio-oss:latest
+    platform: linux/amd64
+    container_name: dremio
+    env_file: .env
+    ports:
+      - "${DREMIO_PORT:-9047}:9047"
+      - "${DREMIO_FLIGHT_PORT:-32010}:32010"
+    volumes:
+      - dremio_data:/var/lib/dremio
+      - ./dremio/dremio.conf:/opt/dremio/conf/dremio.conf:ro
+      - garage_credentials:/credentials:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9047 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
+    depends_on:
+      garage:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - ontop-network
+
+  ontop:
+    image: ontop/ontop:latest
+    container_name: ontop-endpoint
+    env_file: .env
+    ports:
+      - "${ONTOP_PORT}:8080"
+    volumes:
+      - ./input:/opt/ontop/input:ro
+      - ./jdbc:/opt/ontop/jdbc:ro
+    environment:
+      ONTOP_ONTOLOGY_FILE: /opt/ontop/input/ontology.ttl
+      ONTOP_MAPPING_FILE: /opt/ontop/input/mapping.obda
+      ONTOP_PROPERTIES_FILE: /opt/ontop/input/ontop.properties
+      ONTOP_LENSES_FILE: /opt/ontop/input/lenses.json
+      ONTOP_CORS_ALLOWED_ORIGINS: "*"
+      ONTOP_DEV_MODE: "true"
+      JAVA_OPTS: "-Dorg.slf4j.simpleLogger.defaultLogLevel=debug -Dlogback.level=TRACE"
+      LOGGING_LEVEL_IT_UNIBZ_INF_ONTOP: "TRACE"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      dremio:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - ontop-network
+
+volumes:
+  postgres_data:
+  dremio_data:
+  garage_meta:
+  garage_data:
+  garage_credentials:
+    name: garage_credentials
+
+networks:
+  ontop-network:
+    driver: bridge

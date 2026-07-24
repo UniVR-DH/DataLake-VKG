@@ -1,0 +1,22 @@
+replication_mode = "none"
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "garage:3901"
+rpc_secret = "${GARAGE_RPC_SECRET}"
+
+[s3_api]
+# Region: Use standard AWS region for better compatibility with S3 clients
+# Clients like aws-cli and Hadoop S3A expect standard region names
+s3_region = "us-east-1"
+api_bind_addr = "[::]:3900"
+
+# S3V4 translation enables better compatibility with AWS Signature V4 clients
+# This is critical for Hadoop S3A (used by Dremio) and aws-cli
+s3v4_translation_enabled = true
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "${GARAGE_ADMIN_TOKEN}"
