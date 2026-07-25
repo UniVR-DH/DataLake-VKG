@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+import os
+import sys
+import time
+
+import requests
+from dotenv import load_dotenv
+
+load_dotenv(override=False)
+
+
+def require_env(name, default=None):
+    value = os.getenv(name)
+    if value is None or value == "":
+        if default is not None:
+            return default
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
+DREMIO_HOST = require_env("DREMIO_HOST", "dremio")
+DREMIO_PORT = int(require_env("DREMIO_PORT", "9047"))
+BASE_URL = f"http://{DREMIO_HOST}:{DREMIO_PORT}"
+
+DREMIO_ADMIN_USER = require_env("DREMIO_ADMIN_USER", "vdc")
+DREMIO_ADMIN_PASSWORD = require_env("DREMIO_ADMIN_PASSWORD", "vdc-admin1")
+DREMIO_ADMIN_FIRSTNAME = require_env("DREMIO_ADMIN_FIRSTNAME", "Admin")
+DREMIO_ADMIN_LASTNAME = require_env("DREMIO_ADMIN_LASTNAME", "User")
+DREMIO_ADMIN_EMAIL = require_env("DREMIO_ADMIN_EMAIL", "admin@example.com")
+
+
+def log(msg):
+    print(f"[dremio-init] {msg}", flush=True)
+
+
+def auth_headers(token):
+    return {"Authorization": f"_dremio{token}", "Content-Type": "application/json"}
+
+
+def wait_for_dremio():
+    log(f"Waiting for Dremio at {BASE_URL}...")
+    for _ in range(30):
+        try:
+            r = requests.get(f"{BASE_URL}/apiv2/server_status", timeout=5)
+            if r.status_code == 200:
+                log("Dremio is ready!")
+                return
+        except Exception:
+            pass
+        time.sleep(10)
+    log("ERROR: Dremio never became ready.")
+    sys.exit(1)
+
+
+def try_login():
+    try:
+        r = requests.post(
+            f"{BASE_URL}/apiv2/login",
+            json={"userName": DREMIO_ADMIN_USER, "password": DREMIO_ADMIN_PASSWORD},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return r.json()["token"]
+    except Exception:
+        pass
+    return None
+
+
+def bootstrap_first_user():
+    payload = {
+        "userName": DREMIO_ADMIN_USER,
+        "password": DREMIO_ADMIN_PASSWORD,
+        "firstName": DREMIO_ADMIN_FIRSTNAME,
+        "lastName": DREMIO_ADMIN_LASTNAME,
+        "email": DREMIO_ADMIN_EMAIL,
+    }
+    try:
+        r = requests.put(
+            f"{BASE_URL}/apiv2/bootstrap/firstuser", json=payload, timeout=10
+        )
+        if r.status_code in (200, 201):
+            log(f"Bootstrapped first Dremio user '{DREMIO_ADMIN_USER}'")
+            return True
+        log(f"Bootstrap first user failed: {r.status_code} - {r.text[:200]}")
+        return False
+    except Exception as e:
+        log(f"Bootstrap first user failed: {e}")
+        return False
+
+
+def get_token():
+    token = try_login()
+    if token:
+        log(f"Authenticated as '{DREMIO_ADMIN_USER}'")
+        return token
+
+    log(
+        f"Authentication failed for '{DREMIO_ADMIN_USER}', attempting first-user bootstrap..."
+    )
+    if bootstrap_first_user():
+        token = try_login()
+        if token:
+            log(f"Authenticated as '{DREMIO_ADMIN_USER}' after bootstrap")
+            return token
+
+    log(
+        f"ERROR: Authentication failed for '{DREMIO_ADMIN_USER}'. "
+        "If a different admin already exists, set DREMIO_ADMIN_USER/DREMIO_ADMIN_PASSWORD (or DREMIO_USER/DREMIO_PASSWORD)."
+    )
+    sys.exit(1)
+
+
+def delete_source_if_exists(token, name):
+    try:
+        r = requests.get(
+            f"{BASE_URL}/api/v3/catalog/by-path/{name}",
+            headers=auth_headers(token),
+            timeout=10,
+        )
+        if r.status_code == 200:
+            source_id = r.json()["id"]
+            log(f"Deleting existing source '{name}'...")
+            requests.delete(
+                f"{BASE_URL}/api/v3/catalog/{source_id}",
+                headers=auth_headers(token),
+                timeout=30,
+            )
+    except Exception:
+        pass
+
+
+def create_nas_csv_source(token):
+    """Create a NAS source named 'datasets' in Dremio.
+
+    The source points to DREMIO_S3_MOUNT_PATH (default /var/data/s3/dataset),
+    which is the S3 PVC mounted read-only inside the Dremio container.
+    The folder structure is: /var/data/s3/dataset/<dataset_uuid>/*.csv
+    """
+    nas_source_name = os.getenv("DREMIO_NAS_SOURCE_NAME", "datasets")
+    nas_path = os.getenv("DREMIO_S3_MOUNT_PATH", "/s3/dataset")
+
+    try:
+        r = requests.get(
+            f"{BASE_URL}/api/v3/catalog/by-path/{nas_source_name}",
+            headers=auth_headers(token),
+            timeout=10,
+        )
+        if r.status_code == 200:
+            log(f"NAS source '{nas_source_name}' already exists in Dremio, skipping.")
+            return
+    except Exception as e:
+        log(
+            f"Exception occurred while checking for existing NAS source '{nas_source_name}': {e}"
+        )
+
+    payload = {
+        "entityType": "source",
+        "name": nas_source_name,
+        "type": "NAS",
+        "config": {
+            "path": nas_path,
+        },
+    }
+    try:
+        r = requests.post(
+            f"{BASE_URL}/api/v3/catalog",
+            headers=auth_headers(token),
+            json=payload,
+            timeout=30,
+        )
+        if r.status_code in (200, 201):
+            log(f"NAS source '{nas_source_name}' created (path={nas_path}).")
+        elif r.status_code == 409:
+            log(f"NAS source '{nas_source_name}' already exists (409), skipping.")
+        else:
+            log(
+                f"WARNING: Failed to create NAS source '{nas_source_name}': {r.status_code} - {r.text[:200]}"
+            )
+    except Exception as e:
+        log(f"WARNING: Exception while creating NAS source '{nas_source_name}': {e}")
+
+
+def main():
+    log("=" * 40)
+    log("  Dremio Setup Starting")
+    log("=" * 40)
+
+    wait_for_dremio()
+
+    token = get_token()
+    create_nas_csv_source(token)
+
+    log("=" * 40)
+    log("  Setup Complete!")
+    log("  Dremio UI: http://localhost:9047")
+    log(f"  Login: {DREMIO_ADMIN_USER} / {DREMIO_ADMIN_PASSWORD}")
+    log("=" * 40)
+
+
+if __name__ == "__main__":
+    main()
