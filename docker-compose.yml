@@ -10,7 +10,7 @@ services:
       - "${API_PORT:-5002}:5000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./datalake-vkg-api/tools/input:/app/datalake_vkg_api/tools/ontop/input
+      - ./systems/ontop/input:/app/datalake_vkg_api/tools/ontop/input
     depends_on:
       dremio_init:
         condition: service_completed_successfully
@@ -26,7 +26,7 @@ services:
     ports:
       - "${SERVER_PORT:-8080}:8080"
     volumes:
-      - ./datalake-vkg-api/tools/input:/opt/ontop/input
+      - ./systems/ontop/input:/opt/ontop/input
       - ./datalake-vkg-api/tools/jdbc:/opt/ontop/jdbc:ro
     environment:
       ONTOP_ONTOLOGY_FILE: /opt/ontop/input/ontology.ttl
@@ -46,6 +46,28 @@ services:
     networks:
       - ontop-network
 
+
+  garage:
+    image: dxflrs/garage:b72b090a097c8ee2711c8fb065d250ed68dcd0bf
+    container_name: garage
+    env_file: .env
+    restart: unless-stopped
+    ports:
+      - "${GARAGE_S3_PORT:-3900}:3900"
+      - "${GARAGE_ADMIN_PORT:-3903}:3903"
+    volumes:
+      - ./systems/garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "node", "id"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - ontop-network
+
   dremio:
     image: dremio/dremio-oss:latest
     container_name: dremio
@@ -56,7 +78,7 @@ services:
       - "${DREMIO_FLIGHT_PORT:-32010}:32010"
     volumes:
       - dremio_data:/var/lib/dremio
-      - ./datalake-vkg-api/tools/input/data:/var/data/csv:ro
+      - ./systems/ontop/input/data:/var/data/csv:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9047 || exit 1"]
@@ -87,6 +109,8 @@ services:
 
 volumes:
   dremio_data:
+  garage_meta:
+  garage_data:
 
 networks:
   ontop-network:
