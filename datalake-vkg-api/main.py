@@ -50,7 +50,12 @@ def read_root():
             "dataset": {
                 "description": "Onboard a new dataset into the system",
                 "methods": ["POST"],
-                "url": "/api/v1/dataset/",
+                "url": "/api/v1/dataset",
+            },
+            "garage/upload": {
+                "description": "Upload a CSV file into the Garage S3 object store",
+                "methods": ["POST"],
+                "url": "/api/v1/garage/upload",
             },
             # "ontop/ontology": {
             #     "description": "Add a new ontology to ontop",

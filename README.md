@@ -7,3 +7,7 @@ This folder is a running example outside the DataGEMS platform. The full deploye
 * Dremio:
 * Ontop endpoint: 
 * 
+
+
+## API Usage 
+The use of the API is described in https://github.com/UniVR-DH/DataLake-VKG/blob/main/API_USAGE.md

@@ -6,6 +6,7 @@ import requests
 from fastapi.exceptions import HTTPException
 
 from datalake_vkg_api.resources.constants import MockResponse
+from datalake_vkg_api.tools.setup.garage import _read_garage_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -75,14 +76,16 @@ def auth_headers(token):
 async def create_csv_source(token: str, source_name: str) -> bool:
     logger.info("Creating CSV source in Dremio")
 
+    key_id, secret = _read_garage_credentials()
+
     s3_payload = {
         "entityType": "source",
         "name": source_name,
         "type": "S3",
         "config": {
             "credentialType": "ACCESS_KEY",
-            "accessKey": os.getenv("GARAGE_KEY_ID"),
-            "accessSecret": os.getenv("GARAGE_SECRET"),
+            "accessKey": key_id,
+            "accessSecret": secret,
             "secure": False,
             "compatibilityMode": True,
             "whitelistedBuckets": [os.getenv("GARAGE_CSV_BUCKET"), os.getenv("GARAGE_PARQUET_BUCKET")],
@@ -122,10 +125,10 @@ async def create_csv_source(token: str, source_name: str) -> bool:
     }
     r = requests.post(f"{os.getenv('DREMIO_BASE_URL')}/api/v3/catalog", headers=auth_headers(token), json=s3_payload, timeout=30)
     if r.status_code in (200, 201):
-        logger.log(f"  ✓ Created S3 source")
+        logger.info("  ✓ Created S3 source")
         return r.json()["id"]
     else:
-        logger.log(f"  ✗ Failed: {r.status_code} - {r.text[:200]}")
+        logger.error("  ✗ Failed: %s - %s", r.status_code, r.text[:200])
         return None
 
 async def create_postgres_source(token: str, db_name: str, source_name: str) -> bool:

@@ -11,8 +11,11 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./systems/ontop/input:/app/datalake_vkg_api/tools/ontop/input
+      - credentials:/credentials:ro
     depends_on:
       dremio_init:
+        condition: service_completed_successfully
+      garage_init:
         condition: service_completed_successfully
       ontop:
         condition: service_started
@@ -52,19 +55,38 @@ services:
     container_name: garage
     env_file: .env
     restart: unless-stopped
+    command: ["/garage", "-c", "/garageconfig/garage.toml", "server"]
     ports:
       - "${GARAGE_S3_PORT:-3900}:3900"
       - "${GARAGE_ADMIN_PORT:-3903}:3903"
     volumes:
-      - ./systems/garage/garage.toml:/etc/garage.toml:ro
+      - garage_config:/garageconfig:ro
       - garage_meta:/var/lib/garage/meta
       - garage_data:/var/lib/garage/data
     healthcheck:
-      test: ["CMD", "/garage", "node", "id"]
+      test: ["CMD", "/garage", "-c", "/garageconfig/garage.toml", "node", "id"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
+    depends_on:
+      garage_config:
+        condition: service_completed_successfully
+    networks:
+      - ontop-network
+
+  garage_config:
+    image: alpine:3
+    container_name: garage-config
+    restart: "no"
+    environment:
+      GARAGE_RPC_SECRET: "${GARAGE_RPC_SECRET}"
+      GARAGE_ADMIN_TOKEN: "${GARAGE_ADMIN_TOKEN}"
+    command: ["sh", "/scripts/generate-config.sh"]
+    volumes:
+      - ./systems/garage/generate-config.sh:/scripts/generate-config.sh:ro
+      - ./systems/garage/garage.toml:/template/garage.toml:ro
+      - garage_config:/config
     networks:
       - ontop-network
 
@@ -86,6 +108,23 @@ services:
       timeout: 10s
       retries: 15
       start_period: 300s
+    networks:
+      - ontop-network
+
+  garage_init:
+    image: alpine:3
+    container_name: garage-init
+    pid: service:garage
+    command: ["sh", "/scripts/garage-init.sh"]
+    environment:
+      GARAGE_BUCKET: "${GARAGE_CSV_BUCKET:-csvdata}"
+    volumes:
+      - ./systems/garage/garage-init.sh:/scripts/garage-init.sh:ro
+      - credentials:/credentials
+    depends_on:
+      garage:
+        condition: service_healthy
+    restart: "no"
     networks:
       - ontop-network
 
@@ -111,6 +150,8 @@ volumes:
   dremio_data:
   garage_meta:
   garage_data:
+  garage_config:
+  credentials:
 
 networks:
   ontop-network:
