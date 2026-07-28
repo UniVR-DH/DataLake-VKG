@@ -1,7 +1,9 @@
 import logging
 import os
+from pathlib import Path
 from fastapi import APIRouter, Request, File, HTTPException, Query, UploadFile
 from fastapi.exceptions import HTTPException
+import subprocess
 
 from datalake_vkg_api.tools.setup.dremio import add_dataset_to_dremio
 from datalake_vkg_api.tools.setup.garage import upload_csv_to_garage 
@@ -95,3 +97,46 @@ async def upload_csv(
         "size_bytes": len(data),
     }
 
+@router.post(
+    "/croissant",
+    status_code=201,
+    summary="Upload a CSV file to Garage S3",
+)
+async def generate_croissant(
+    path: str, 
+    description: str,
+):
+    """
+    Generate the Croissant profile from the provided CSV file. 
+    - **file**: CSV file sent as `multipart/form-data`.
+    """
+    ontop_input = Path(os.getenv("ONTOP_INPUT_DIR", "/app/datalake_vkg_api/tools/ontop/input"))
+
+    # Accept either a bare filename, a path relative to systems/ontop/input/, or an absolute path.
+    raw = Path(path)
+    if raw.is_absolute():
+        abs_file = raw
+    else:
+        # Strip the host-side prefix (systems/ontop/input) if the user passed it
+        for prefix in ("systems/ontop/input/", "systems/ontop/input"):
+            if str(raw).startswith(prefix):
+                raw = Path(str(raw)[len(prefix):].lstrip("/"))
+                break
+        abs_file = ontop_input / raw
+
+    input_dir = str(abs_file.parent)
+    stem = abs_file.stem
+    output_path = str(ontop_input / "croissant" / (stem + ".ttl"))
+
+    try: 
+        subprocess.run([
+            "croissant-baker",
+            "--input", input_dir,
+            "--creator", "DataLake-VKG,dl-vkg@example.com",
+            "--description", description,
+            "--license", "CC-BY-4.0",
+            "--output", output_path,
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        logger.error("Croissant generation failed: %s", e)
+        raise HTTPException(status_code=500, detail="Croissant generation failed")

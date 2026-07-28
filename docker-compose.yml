@@ -6,6 +6,8 @@ services:
     container_name: datalake-vkg-api
     env_file:
       - .env
+    environment:
+      ONTOP_INPUT_DIR: /app/datalake_vkg_api/tools/ontop/input
     ports:
       - "${API_PORT:-5002}:5000"
     volumes:

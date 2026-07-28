@@ -57,6 +57,11 @@ def read_root():
                 "methods": ["POST"],
                 "url": "/api/v1/garage/upload",
             },
+            "croissant":{
+                "description": "Generate a Croissant ontology from a CSV file",
+                "methods": ["POST"],
+                "url": "/api/v1/croissant",
+            }
             # "ontop/ontology": {
             #     "description": "Add a new ontology to ontop",
             #     "methods": ["GET"],
