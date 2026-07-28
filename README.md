@@ -8,6 +8,8 @@ This folder is a running example outside the DataGEMS platform. The full deploye
 * Ontop endpoint: 
 * 
 
+docker-compose build api && docker-compose up -d api
 
 ## API Usage 
 The use of the API is described in https://github.com/UniVR-DH/DataLake-VKG/blob/main/API_USAGE.md
+

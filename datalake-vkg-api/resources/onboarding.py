@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from pathlib import Path
@@ -7,6 +8,8 @@ import subprocess
 
 from datalake_vkg_api.tools.setup.dremio import add_dataset_to_dremio
 from datalake_vkg_api.tools.setup.garage import upload_csv_to_garage 
+from datalake_vkg_api.tools.mapping.mapping_generation import generate_mappings, merge_mapping_files, merge_ontology_files
+
 
 
 router = APIRouter()
@@ -31,22 +34,59 @@ async def onboard_dataset(source_name: str, path: str, mimeType:str):
         raise HTTPException(status_code=400, detail="For MIME type 'text/csv', the path must end with '.csv'.")
     if mimeType == "application/parquet" and not path.lower().endswith(".parquet"):
         raise HTTPException(status_code=400, detail="For MIME type 'application/parquet', the path must end with '.parquet'.")
+
+    ## Garage ingestion (only for CSV files)
     if mimeType == "text/csv":
         try:
-            target_bucket = os.getenv("GARAGE_CSV_BUCKET", "csvdata")
-            upload_csv_response = await upload_csv_to_garage(b"", path.split("/")[-1], target_bucket)
+            target_bucket = os.getenv("GARAGE_CSV_BUCKET", "csv")
+            ontop_input = Path(os.getenv("ONTOP_INPUT_DIR", "/app/datalake_vkg_api/tools/ontop/input"))
+            raw = Path(path)
+            for prefix in ("systems/ontop/input/", "systems/ontop/input"):
+                if str(raw).startswith(prefix):
+                    raw = Path(str(raw)[len(prefix):].lstrip("/"))
+                    break
+            abs_file = raw if raw.is_absolute() else ontop_input / raw
+            file_data = abs_file.read_bytes()
+            upload_csv_response = await upload_csv_to_garage(file_data, abs_file.name, target_bucket)
         except Exception as e:
             logger.error("Failed to upload CSV to Garage: %s", e)
             raise HTTPException(status_code=500, detail="Failed to upload CSV to Garage")
+
+    ## Dremio ingestion
     dremio_response = await add_dataset_to_dremio(source_name, path, mimeType)
-    if dremio_response.status_code != 201:
+    if dremio_response.status_code == 409:
+        logger.warning(
+            "Dataset already registered in Dremio for source_name=%s, skipping.",
+            source_name,
+        )
+    elif dremio_response.status_code != 201:
         logger.error(
             "Dremio dataset creation failed for source_name=%s with status_code=%s",
             source_name,
             dremio_response.status_code,
         )
         raise HTTPException(status_code=500, detail="Failed to add dataset to Dremio")
+
+    ## Croissant generation
+    croissant = await generate_croissant(path, f"Croissant ontology for {source_name}")
+    try: 
+        croissant_text = (Path(os.getenv("ONTOP_INPUT_DIR", "/app/datalake_vkg_api/tools/ontop/input")) / "croissant" / (Path(path).stem + ".ttl")).read_text()
+        croissant_dict = json.loads(croissant_text)
+    except Exception as e:
+        logger.error("Failed to read Croissant profile: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to read Croissant profile")
+    
+    ## Mapping and ontology generation
+    try:
+        csv_filename = Path(path).name if mimeType == "text/csv" else None
+        generate_mappings(croissant_dict, source_name, mimeType, "public", csv_filename=csv_filename, dremio_source_name=source_name)
+    except Exception as e:
+        logger.error("Failed to generate mappings and ontology: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to generate mappings and ontology")
+    
     return {"message": f"Dataset at {path} has been successfully onboarded."}
+
+
 
 _MAX_CSV_BYTES = 512 * 1024 * 1024  # 512 MB
 
@@ -57,11 +97,7 @@ _MAX_CSV_BYTES = 512 * 1024 * 1024  # 512 MB
     summary="Upload a CSV file to Garage S3",
 )
 async def upload_csv(
-    file: UploadFile = File(..., description="CSV file to ingest into Garage"),
-    bucket: str = Query(
-        None,
-        description="Target Garage bucket (defaults to GARAGE_CSV_BUCKET env var or 'csvdata')",
-    ),
+    file: UploadFile = File(..., description="CSV file to ingest into Garage")
 ):
     """
     Ingest a local CSV dataset into the Garage S3-compatible object store.
@@ -77,7 +113,7 @@ async def upload_csv(
     if not (file.filename or "").lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only .csv files are accepted")
 
-    target_bucket = bucket or os.getenv("GARAGE_CSV_BUCKET", "csvdata")
+    target_bucket = os.getenv("GARAGE_CSV_BUCKET", "csvdata")
 
     data = await file.read()
     if len(data) > _MAX_CSV_BYTES:
@@ -140,3 +176,25 @@ async def generate_croissant(
     except subprocess.CalledProcessError as e:
         logger.error("Croissant generation failed: %s", e)
         raise HTTPException(status_code=500, detail="Croissant generation failed")
+
+
+@router.get(
+    "/ontop/restart",
+    status_code=200,
+    summary="Restart the Ontop server with new mappings and ontologies",
+)
+async def restart_ontop():
+    """
+    Restart the Ontop server to apply new mappings and ontologies.
+    """
+    import docker
+    merge_mapping_files()
+    merge_ontology_files()
+    try:
+        client = docker.from_env()
+        container = client.containers.get("ontop-endpoint")
+        container.restart()
+    except Exception as e:
+        logger.error("Failed to restart Ontop container: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to restart Ontop server")
+

@@ -61,7 +61,12 @@ def read_root():
                 "description": "Generate a Croissant ontology from a CSV file",
                 "methods": ["POST"],
                 "url": "/api/v1/croissant",
-            }
+            }, 
+            "ontop/restart": {
+                "description": "Restart the Ontop server to apply new mappings and ontologies",
+                "methods": ["GET"],
+                "url": "/api/v1/ontop/restart",
+            },
             # "ontop/ontology": {
             #     "description": "Add a new ontology to ontop",
             #     "methods": ["GET"],

@@ -7,22 +7,20 @@ from urllib.parse import urlparse
 import time
 
 from rdflib import Graph, Namespace, BNode, Literal, RDF, URIRef
-from datalake_vkg_api.tools.S3.ontop_inputs import (
-    upload_mapping_file,
-    upload_ontology_file,
-)
+
 
 logger = logging.getLogger(__name__)
 
 RR = Namespace("http://www.w3.org/ns/r2rml#")
 EX = Namespace("http://example.com/")
 
-INPUT_DIR = Path(__file__).parent.parent / "ontop/input"
+INPUT_DIR = Path(os.getenv("ONTOP_INPUT_DIR", "/app/datalake_vkg_api/tools/ontop/input"))
 MAPPINGS_DIR = INPUT_DIR / "mappings"
 ONTOLOGIES_DIR = INPUT_DIR / "ontologies"
 MAPPING_FILE = INPUT_DIR / "mapping.ttl"
 ONTOLOGY_FILE = INPUT_DIR / "ontology.ttl"
 DREMIO_DATASET_PREFIX = os.getenv("DREMIO_DATASET_PREFIX", "d_")
+GARAGE_CSV_BUCKET = os.getenv("GARAGE_CSV_BUCKET", "csvdata")
 
 
 SCHEMA_TO_XSD = {
@@ -151,9 +149,9 @@ def merge_ontology_files() -> None:
 
 
 def generate_mappings(
-    croissant_dict, source_id: str, mimeType: str, schema_name: str = "public"
+    croissant_dict, source_id: str, mimeType: str, schema_name: str = "public", csv_filename: str | None = None, dremio_source_name: str | None = None
 ):
-    croissant_dict = add_uri_prefix_to_croissant(croissant_dict)
+    #croissant_dict = add_uri_prefix_to_croissant(croissant_dict)
 
     total_start = time.perf_counter()
 
@@ -165,7 +163,7 @@ def generate_mappings(
     )
 
     mappings_start = time.perf_counter()
-    mappings = generate_mappings_file(croissant_dict, source_id, schema_name, mimeType)
+    mappings = generate_mappings_file(croissant_dict, source_id, mimeType, schema_name, csv_filename=csv_filename, dremio_source_name=dremio_source_name)
     mappings_elapsed = time.perf_counter() - mappings_start
     logger.info(
         "Mapping generation took %.3fs for source_id=%s", mappings_elapsed, source_id
@@ -177,17 +175,19 @@ def generate_mappings(
         total_elapsed,
         source_id,
     )
+    target_mapping_path = MAPPINGS_DIR / f"{source_id}.ttl"
+    target_ontology_path = ONTOLOGIES_DIR / f"{source_id}.ttl"
 
-    upload_mapping_file(
-        mappings.serialize(format="turtle").encode("utf-8"), f"{source_id}.ttl"
-    )
-    upload_ontology_file(
-        ontology.serialize(format="turtle").encode("utf-8"), f"{source_id}.ttl"
-    )
+    ## Saving files into the respective repositories
+    with open(target_mapping_path, "w") as f:
+        f.write(mappings.serialize(format="turtle"))
+    with open(target_ontology_path, "w") as f:
+        f.write(ontology.serialize(format="turtle"))
 
 
-def generate_mappings_file(croissant_dict, source_id: str, schema_name, mimeType):
-    dataset_id = croissant_dict.get("@id", "unknown_dataset").split(":")[-1]
+def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema_name: str = "public", csv_filename: str | None = None, dremio_source_name: str | None = None):
+    dataset_id = croissant_dict.get("@id", source_id).split(":")[-1]
+    _dremio_source = dremio_source_name or source_id
     mappings = Graph()
     mappings.bind("rr", RR)
     extracted_schema = extract_schema(croissant_dict)
@@ -220,8 +220,8 @@ def generate_mappings_file(croissant_dict, source_id: str, schema_name, mimeType
         mappings.add((logical_table, RDF.type, RR.LogicalTable))
         dremio_dataset_name = _get_dremio_dataset_name(source_id)
         if mimeType == "text/csv":
-            space_name = "csvroot_views"
-            sql_query = f'SELECT * FROM "{space_name}"."{safe_view_name}"'
+            filename = csv_filename or f"{source_id}.csv"
+            sql_query = f'SELECT * FROM "{_dremio_source}"."{GARAGE_CSV_BUCKET}"."{filename}"'
             mappings.add((logical_table, RR.sqlQuery, Literal(sql_query)))
         elif mimeType == "text/sql":
             sql_query = (
@@ -283,7 +283,7 @@ def generate_mappings_file(croissant_dict, source_id: str, schema_name, mimeType
 
 
 def generate_ontology(croissant_dict, source_id: str, schema_name: str = "public"):
-    dataset_id = croissant_dict.get("@id", "unknown_dataset").split(":")[-1]
+    dataset_id = croissant_dict.get("@id", source_id).split(":")[-1]
     croissant_graph = Graph()
     croissant_graph.parse(data=json.dumps(croissant_dict), format="json-ld")
     ontology = Graph()
@@ -301,13 +301,13 @@ def generate_ontology(croissant_dict, source_id: str, schema_name: str = "public
                     URIRef("http://www.w3.org/2002/07/owl#Class"),
                 )
             )
-            ontology.add(
-                (
-                    URIRef(f"http://example.com/{dataset_id}/{recordset_name}"),
-                    URIRef("http://www.w3.org/ns/prov#wasDerivedFrom"),
-                    URIRef(f"http://example.com/{source_id}/{table}"),
-                )
-            )
+            # ontology.add(
+            #     (
+            #         URIRef(f"http://example.com/{dataset_id}/{recordset_name}"),
+            #         URIRef("http://www.w3.org/ns/prov#wasDerivedFrom"),
+            #         URIRef(f"http://example.com/{source_id}/{table}"),
+            #     )
+            # )
 
     # Generation of the properties in the ontology
     for table, details in extracted_schema.items():
@@ -326,15 +326,15 @@ def generate_ontology(croissant_dict, source_id: str, schema_name: str = "public
                         URIRef(f"http://example.com/{dataset_id}/{recordset_name}"),
                     )
                 )
-                ontology.add(
-                    (
-                        URIRef(
-                            f"http://example.com/{dataset_id}/{table}#{safe_field_name}"
-                        ),
-                        URIRef("http://www.w3.org/ns/prov#wasDerivedFrom"),
-                        URIRef(f"http://example.com/{source_id}/{field}"),
-                    )
-                )
+                # ontology.add(
+                #     (
+                #         URIRef(
+                #             f"http://example.com/{dataset_id}/{table}#{safe_field_name}"
+                #         ),
+                #         URIRef("http://www.w3.org/ns/prov#wasDerivedFrom"),
+                #         URIRef(f"http://example.com/{source_id}/{field}"),
+                #     )
+                # )
                 for fk in details["foreign_keys"]:
                     if fk["column"] == field:
                         target_table, target_pk = fk["references"]
@@ -359,46 +359,51 @@ def generate_ontology(croissant_dict, source_id: str, schema_name: str = "public
                             )
                         )
                         break
-                # else:
-                #     ontology.add(
-                #         (
-                #             URIRef(
-                #                 f"http://example.com/{dataset_id}/{table}#{field_name}"
-                #             ),
-                #             RDF.type,
-                #             URIRef("http://www.w3.org/2002/07/owl#DatatypeProperty"),
-                #         )
-                #     )
-                #     query = f"""
-                #     PREFIX cr: <http://mlcommons.org/croissant/>
-                #     PREFIX d: <http://datagems-dev.scayle.es/>
+                else:
+                    ontology.add(
+                        (
+                            URIRef(
+                                f"http://example.com/{dataset_id}/{table}#{field_name}"
+                            ),
+                            RDF.type,
+                            URIRef("http://www.w3.org/2002/07/owl#DatatypeProperty"),
+                        )
+                    )
+                    query = f"""
+                    PREFIX cr: <http://mlcommons.org/croissant/>
 
-                #     SELECT ?dataType WHERE {{
-                #         <{field}> cr:dataType ?dataType .
-                #     }}
-                #     """
-
-                # print(query)
-                # results = croissant_graph.query(query)
-                # for row in results:
-                #     dataType = (
-                #         row.dataType.value
-                #         if hasattr(row.dataType, "value")
-                #         else str(row.dataType)
-                #     )
-                # TO-DO when the problem with schema is resolved
-                # if dataType != "None":
-                # ontology.add(
-                #     (
-                #         URIRef(
-                #             f"http://example.com/{dataset_id}/{table}#{field_name}"
-                #         ),
-                #         URIRef(
-                #             "http://www.w3.org/2000/01/rdf-schema#range"
-                #         ),
-                #         URIRef(dataType),
-                #     )
-                # )
+                    SELECT ?dataType WHERE {{
+                        <{field}> cr:dataType ?dataType .
+                    }}
+                    """
+                results = croissant_graph.query(query)
+                for row in results:
+                    dataType = (
+                        row.dataType.value
+                        if hasattr(row.dataType, "value")
+                        else str(row.dataType)
+                    )
+                if dataType not in ["None", "https://schema.org/Float", "https://schema.org/Float64"]:
+                    ontology.add(
+                        (
+                            URIRef(
+                                f"http://example.com/{dataset_id}/{table}#{field_name}"
+                            ),
+                            URIRef("http://www.w3.org/2000/01/rdf-schema#range"),
+                            URIRef(dataType),
+                        )
+                    )
+                ontology.add(
+                    (
+                        URIRef(
+                            f"http://example.com/{dataset_id}/{table}#{field_name}"
+                        ),
+                        URIRef(
+                            "http://www.w3.org/2000/01/rdf-schema#range"
+                        ),
+                        URIRef(dataType),
+                    )
+                )
 
             # Binary tables
             else:

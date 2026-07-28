@@ -48,7 +48,7 @@
   },
   "@type": "sc:Dataset",
   "name": "data",
-  "description": "List of weather stations with coordinates and metadata",
+  "description": "Croissant ontology for stations",
   "conformsTo": "http://mlcommons.org/croissant/1.1",
   "citeAs": "DataLake-VKG. data [Data set].",
   "creator": {

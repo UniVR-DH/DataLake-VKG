@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import httpx
@@ -88,7 +89,7 @@ async def create_csv_source(token: str, source_name: str) -> bool:
             "accessSecret": secret,
             "secure": False,
             "compatibilityMode": True,
-            "whitelistedBuckets": [os.getenv("GARAGE_CSV_BUCKET"), os.getenv("GARAGE_PARQUET_BUCKET")],
+            "whitelistedBuckets": [os.getenv("GARAGE_CSV_BUCKET")],
             "propertyList": [
                 # Core Garage connectivity — this source's propertyList is now the
                 # single source of truth for S3A config (core-site.xml removed).
@@ -127,6 +128,9 @@ async def create_csv_source(token: str, source_name: str) -> bool:
     if r.status_code in (200, 201):
         logger.info("  ✓ Created S3 source")
         return r.json()["id"]
+    elif r.status_code == 409:
+        logger.warning("  ⚠ S3 source '%s' already exists in Dremio, skipping creation.", source_name)
+        return True
     else:
         logger.error("  ✗ Failed: %s - %s", r.status_code, r.text[:200])
         return None

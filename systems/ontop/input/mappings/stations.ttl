@@ -1,13 +1,7 @@
-@prefix ex: <http://example.com/> .
 @prefix rr: <http://www.w3.org/ns/r2rml#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<file:///app/datalake_vkg_api/tools/ontop/input/mappings/mapping-init.ttl#DummyMapping> a rr:TriplesMap ;
-    rr:logicalTable [ rr:sqlQuery "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.\"TABLES\" WHERE 1=0" ] ;
-    rr:subjectMap [ rr:class ex:Dummy ;
-            rr:template "http://example.org/dummy/{TABLE_NAME}" ] .
-
-<file:///app/datalake_vkg_api/tools/ontop/input/mappings/stations.ttl#TripleMapping_stations_1> a rr:TriplesMap ;
+<#TripleMapping_stations_1> a rr:TriplesMap ;
     rr:logicalTable [ a rr:LogicalTable ;
             rr:sqlQuery "SELECT * FROM \"garage\".\"csv\".\"stations_list.csv\"" ] ;
     rr:predicateObjectMap [ a rr:PredicateObjectMap ;

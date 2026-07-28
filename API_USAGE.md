@@ -12,3 +12,13 @@ curl -X POST "http://localhost:5002/api/v1/garage/upload"   -F "file=@systems/on
 ```bash
 curl -X POST "http://localhost:5002/api/v1/dataset?source_name=stations&path=systems/ontop/input/data/stations_list.csv&mimeType=text/csv"
 ```
+
+## Croissant Generator
+```bash
+curl -X POST "http://localhost:5002/api/v1/croissant?path=systems/ontop/input/data/stations_list.csv&description=List%20of%20weather%20stations%20with%20coordinates%20and%20metadata"
+```
+
+## Restarting Ontop 
+```bash
+curl -X GET "http://localhost:5002/api/v1/ontop/restart"
+```

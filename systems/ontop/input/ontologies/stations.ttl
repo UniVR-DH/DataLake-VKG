@@ -18,7 +18,5 @@
     rdfs:domain <http://example.com/stations/stations_list> ;
     rdfs:range schema:Text .
 
-<http://example.org/ontology> a owl:Ontology .
-
 <http://example.com/stations/stations_list> a owl:Class .
 
