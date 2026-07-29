@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import time
 
 from rdflib import Graph, Namespace, BNode, Literal, RDF, URIRef
+from datalake_vkg_api.resources.constants import S3_SOURCE_NAME, GARAGE_CSV_BUCKET
 
 
 logger = logging.getLogger(__name__)
@@ -17,8 +18,10 @@ EX = Namespace("http://example.com/")
 INPUT_DIR = Path(os.getenv("ONTOP_INPUT_DIR", "/app/datalake_vkg_api/tools/ontop/input"))
 MAPPINGS_DIR = INPUT_DIR / "mappings"
 ONTOLOGIES_DIR = INPUT_DIR / "ontologies"
+LENSES_DIR = INPUT_DIR / "lenses"
 MAPPING_FILE = INPUT_DIR / "mapping.ttl"
 ONTOLOGY_FILE = INPUT_DIR / "ontology.ttl"
+LENSES_FILE = INPUT_DIR / "lenses.json"
 DREMIO_DATASET_PREFIX = os.getenv("DREMIO_DATASET_PREFIX", "d_")
 GARAGE_CSV_BUCKET = os.getenv("GARAGE_CSV_BUCKET", "csvdata")
 
@@ -221,7 +224,7 @@ def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema
         dremio_dataset_name = _get_dremio_dataset_name(source_id)
         if mimeType == "text/csv":
             filename = csv_filename or f"{source_id}.csv"
-            sql_query = f'SELECT * FROM "{_dremio_source}"."{GARAGE_CSV_BUCKET}"."{filename}"'
+            sql_query = f'SELECT * FROM "{S3_SOURCE_NAME}"."{GARAGE_CSV_BUCKET}"."{filename}"'
             mappings.add((logical_table, RR.sqlQuery, Literal(sql_query)))
         elif mimeType == "text/sql":
             sql_query = (
@@ -383,7 +386,7 @@ def generate_ontology(croissant_dict, source_id: str, schema_name: str = "public
                         if hasattr(row.dataType, "value")
                         else str(row.dataType)
                     )
-                if dataType not in ["None", "https://schema.org/Float", "https://schema.org/Float64"]:
+                if dataType not in ["None", "https://schema.org/Float", "https://schema.org/Text", "http://mlcommons.org/croissant/Float64"]:
                     ontology.add(
                         (
                             URIRef(
@@ -393,17 +396,6 @@ def generate_ontology(croissant_dict, source_id: str, schema_name: str = "public
                             URIRef(dataType),
                         )
                     )
-                ontology.add(
-                    (
-                        URIRef(
-                            f"http://example.com/{dataset_id}/{table}#{field_name}"
-                        ),
-                        URIRef(
-                            "http://www.w3.org/2000/01/rdf-schema#range"
-                        ),
-                        URIRef(dataType),
-                    )
-                )
 
             # Binary tables
             else:

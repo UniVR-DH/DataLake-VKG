@@ -1,22 +1,17 @@
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix schema: <https://schema.org/> .
 
 <http://example.com/stations/stations_list#altitude> a owl:DatatypeProperty ;
-    rdfs:domain <http://example.com/stations/stations_list> ;
-    rdfs:range <http://mlcommons.org/croissant/Float64> .
+    rdfs:domain <http://example.com/stations/stations_list> .
 
 <http://example.com/stations/stations_list#latitude> a owl:DatatypeProperty ;
-    rdfs:domain <http://example.com/stations/stations_list> ;
-    rdfs:range <http://mlcommons.org/croissant/Float64> .
+    rdfs:domain <http://example.com/stations/stations_list> .
 
 <http://example.com/stations/stations_list#longitude> a owl:DatatypeProperty ;
-    rdfs:domain <http://example.com/stations/stations_list> ;
-    rdfs:range <http://mlcommons.org/croissant/Float64> .
+    rdfs:domain <http://example.com/stations/stations_list> .
 
 <http://example.com/stations/stations_list#stations> a owl:DatatypeProperty ;
-    rdfs:domain <http://example.com/stations/stations_list> ;
-    rdfs:range schema:Text .
+    rdfs:domain <http://example.com/stations/stations_list> .
 
 <http://example.org/ontology> a owl:Ontology .
 

@@ -5,13 +5,27 @@ import httpx
 import requests
 
 from fastapi.exceptions import HTTPException
+from urllib.parse import quote
+from pathlib import PurePosixPath
 
-from datalake_vkg_api.resources.constants import MockResponse
+from datalake_vkg_api.resources.constants import MockResponse, GARAGE_CSV_BUCKET, S3_SOURCE_NAME
 from datalake_vkg_api.tools.setup.garage import _read_garage_credentials
 
 logger = logging.getLogger(__name__)
 
-async def add_dataset_to_dremio(source_name: str, path: str, mimeType: str):
+DREMIO_BASE_URL = os.getenv("DREMIO_BASE_URL", "http://dremio:9047")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "ds_era5_land")
+CSV_FORMAT = {
+    "type": "Text",
+    "fieldDelimiter": ",",
+    "extractHeader": True,
+    "autoGenerateColumnNames": False,
+    "trimHeader": True
+}
+
+
+
+async def add_dataset_to_dremio(source_name: str, mimeType: str, path: str):
     """
     Add a dataset to Dremio.
     - **source_name**: The name of the source to create.
@@ -21,9 +35,10 @@ async def add_dataset_to_dremio(source_name: str, path: str, mimeType: str):
     """
     dremio_token = await get_dremio_token()
     if mimeType == "text/csv":
-        created = await create_csv_source(dremio_token, source_name)
+        filename = PurePosixPath(path).name
+        created = await create_csv_source(dremio_token, source_name, filename)
     elif mimeType == "text/sql":
-        created = await create_postgres_source(dremio_token, source_name)
+        created = await create_postgres_source(dremio_token, POSTGRES_DB, source_name)
     else:
         logger.error("Unsupported mimeType=%s for source_name=%s", mimeType, source_name)
         return MockResponse(status_code=400)
@@ -74,14 +89,14 @@ async def get_dremio_token() -> str:
 def auth_headers(token):
     return {"Authorization": f"_dremio{token}", "Content-Type": "application/json"}
 
-async def create_csv_source(token: str, source_name: str) -> bool:
+async def create_csv_source(token: str, source_name: str, file_path:str) -> bool:
     logger.info("Creating CSV source in Dremio")
 
     key_id, secret = _read_garage_credentials()
 
     s3_payload = {
         "entityType": "source",
-        "name": source_name,
+        "name": S3_SOURCE_NAME,
         "type": "S3",
         "config": {
             "credentialType": "ACCESS_KEY",
@@ -127,14 +142,64 @@ async def create_csv_source(token: str, source_name: str) -> bool:
     r = requests.post(f"{os.getenv('DREMIO_BASE_URL')}/api/v3/catalog", headers=auth_headers(token), json=s3_payload, timeout=30)
     if r.status_code in (200, 201):
         logger.info("  ✓ Created S3 source")
-        return r.json()["id"]
     elif r.status_code == 409:
         logger.warning("  ⚠ S3 source '%s' already exists in Dremio, skipping creation.", source_name)
-        return True
     else:
         logger.error("  ✗ Failed: %s - %s", r.status_code, r.text[:200])
-        return None
+    try:
+        return promote_file(token, S3_SOURCE_NAME, os.getenv("GARAGE_CSV_BUCKET"), file_path, CSV_FORMAT)
+    except Exception as e:
+        logger.error("Failed to promote file to Dremio: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to promote file to Dremio")
 
+def promote_file(token, source_name, bucket, filename, file_format):
+    by_path = source_file_path(S3_SOURCE_NAME, GARAGE_CSV_BUCKET, filename)
+    catalog_lookup = f"{DREMIO_BASE_URL}/api/v3/catalog/by-path/{by_path}"
+    try:
+        lookup = requests.get(catalog_lookup, headers=auth_headers(token), timeout=30)
+        if lookup.status_code != 200:
+            logger.error(f"  ✗ Failed to find '{filename}' in source: HTTP {lookup.status_code}")
+            return False
+
+        entity = lookup.json()
+    except Exception as e:
+        logger.error(f"  ✗ Failed to parse lookup response for '{filename}': {e}")
+        return False
+    file_id = entity.get("id")
+    entity_type = entity.get("entityType")
+
+    if entity_type == "dataset":
+        # Already promoted previously — force a metadata refresh instead of re-promoting
+        refresh_url = f"{DREMIO_BASE_URL}/api/v3/catalog/{quote(file_id, safe='')}/refresh"
+        r = requests.post(refresh_url, headers=auth_headers(token), timeout=30)
+        if r.status_code in (200, 204):
+            logger.info(f"  ✓ Refreshed metadata for '{filename}'")
+            return True
+        logger.error(f"  ✗ Failed to refresh '{filename}': HTTP {r.status_code} {r.text[:200]}")
+        return False
+    try:
+        promote_url = f"{DREMIO_BASE_URL}/api/v3/catalog/{quote(file_id, safe='')}"
+        payload = {
+            "entityType": "dataset",
+            "id": file_id,
+            "type": "PHYSICAL_DATASET",
+            "path": [S3_SOURCE_NAME, GARAGE_CSV_BUCKET, filename],
+            "format": file_format,
+        }
+        r = requests.post(promote_url, headers=auth_headers(token), json=payload, timeout=30)
+        if r.status_code in (200, 201):
+            logger.info(f"  ✓ Promoted '{filename}'")
+            return True
+        elif r.status_code == 409:
+            logger.info(f"  ✓ '{filename}' already promoted")
+            return True
+        else:
+            logger.error(f"  ✗ Failed to promote '{filename}': HTTP {r.status_code}")
+            return False
+    except Exception as e:
+        logger.error(f"  ✗ Failed to promote '{filename}': {e}")
+        return False
+    
 async def create_postgres_source(token: str, db_name: str, source_name: str) -> bool:
     """Create a PostgreSQL source in Dremio with the given database name and source name.
     The connection details are retrieved from environment variables.
@@ -183,3 +248,6 @@ async def create_postgres_source(token: str, db_name: str, source_name: str) -> 
         response.text[:500],
     )
     return False
+
+def source_file_path(source_name, bucket, filename):
+    return "/".join([source_name, bucket, filename])

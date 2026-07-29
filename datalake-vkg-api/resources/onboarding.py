@@ -2,22 +2,25 @@ import json
 import logging
 import os
 from pathlib import Path
-from fastapi import APIRouter, Request, File, HTTPException, Query, UploadFile
+from typing import Optional
+from fastapi import APIRouter, Request, File, HTTPException, Query, UploadFile, Depends
 from fastapi.exceptions import HTTPException
 import subprocess
+import docker
+import httpx
+import time
 
 from datalake_vkg_api.tools.setup.dremio import add_dataset_to_dremio
 from datalake_vkg_api.tools.setup.garage import upload_csv_to_garage 
 from datalake_vkg_api.tools.mapping.mapping_generation import generate_mappings, merge_mapping_files, merge_ontology_files
-
-
+from datalake_vkg_api.resources.constants import ONTOP_SPARQL_URL, SparqlRequest
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
 @router.post("/dataset", status_code=201, summary="Onboard a new dataset into the system")
-async def onboard_dataset(source_name: str, path: str, mimeType:str):
+async def onboard_dataset(source_name: str, mimeType:str, path: Optional[str] = None):
     """
     Onboard a new dataset into Dremio.
 
@@ -26,8 +29,10 @@ async def onboard_dataset(source_name: str, path: str, mimeType:str):
     - **mimeType**: The MIME type of the dataset. Accepted values are: "text/csv", "application/parquet", "text/sql".
 
     """
-    path = path.strip()
+    if path is not None:
+        path = path.strip()
     mimeType = mimeType.strip()
+    source_name = source_name.strip()
     if mimeType not in ["text/csv", "application/parquet", "text/sql"]:
         raise HTTPException(status_code=400, detail="Invalid MIME type. Accepted values are: 'text/csv', 'application/parquet', 'text/sql'.")
     if mimeType == "text/csv" and not path.lower().endswith(".csv"):
@@ -48,12 +53,14 @@ async def onboard_dataset(source_name: str, path: str, mimeType:str):
             abs_file = raw if raw.is_absolute() else ontop_input / raw
             file_data = abs_file.read_bytes()
             upload_csv_response = await upload_csv_to_garage(file_data, abs_file.name, target_bucket)
+            if not upload_csv_response:  # or however success is signaled
+                raise HTTPException(status_code=500, detail="CSV upload to Garage failed")
         except Exception as e:
             logger.error("Failed to upload CSV to Garage: %s", e)
             raise HTTPException(status_code=500, detail="Failed to upload CSV to Garage")
 
     ## Dremio ingestion
-    dremio_response = await add_dataset_to_dremio(source_name, path, mimeType)
+    dremio_response = await add_dataset_to_dremio(source_name, mimeType, path)
     if dremio_response.status_code == 409:
         logger.warning(
             "Dataset already registered in Dremio for source_name=%s, skipping.",
@@ -187,7 +194,7 @@ async def restart_ontop():
     """
     Restart the Ontop server to apply new mappings and ontologies.
     """
-    import docker
+    
     merge_mapping_files()
     merge_ontology_files()
     try:
@@ -198,3 +205,32 @@ async def restart_ontop():
         logger.error("Failed to restart Ontop container: %s", e)
         raise HTTPException(status_code=500, detail="Failed to restart Ontop server")
 
+
+@router.post("/query/sparql")
+async def execute_sparql_query(
+    body: SparqlRequest
+):
+    """Endpoint to execute SPARQL queries against the Ontop endpoint."""
+
+    query = body.query
+    logger.info("Received SPARQL query: %s", query)
+
+    headers = {
+        "Content-Type": "application/sparql-query",
+        "Accept": "application/sparql-results+json",
+    }
+
+    timeout = httpx.Timeout(connect=60.0, read=600.0, write=600.0, pool=600.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        start_time = time.perf_counter()
+        resp = await client.post(ONTOP_SPARQL_URL, content=query, headers=headers)
+        elapsed = time.perf_counter() - start_time
+
+    logger.info("SPARQL query executed in %.3fs (status=%s)", elapsed, resp.status_code)
+
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=500, detail=f"Ontop SPARQL query failed: {resp.text}"
+        )
+
+    return resp.json()
