@@ -2,6 +2,9 @@ import argparse
 import json
 import numpy as np
 import psycopg
+import zipfile
+import tempfile
+import os
 
 from eccodes import (
     codes_grib_new_from_file,
@@ -117,13 +120,36 @@ def load_grib_file(conn, filename, dataset_id):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("gribfile")
+    parser.add_argument("inputfile")   # now accepts .zip OR .grib
     parser.add_argument("--db", required=True)
     args = parser.parse_args()
 
+    input_path = args.inputfile
+
+    # If ZIP → extract GRIB inside a temp file
+    if input_path.endswith(".zip"):
+        with zipfile.ZipFile(input_path) as archive:
+            # find first .grib file
+            grib_members = [m for m in archive.namelist() if m.endswith(".grib")]
+            if not grib_members:
+                raise Exception("ZIP contains no .grib file")
+
+            grib_name = grib_members[0]
+
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                with archive.open(grib_name) as source:
+                    tmp.write(source.read())
+                grib_path = tmp.name
+    else:
+        grib_path = input_path
+
     with psycopg.connect(args.db) as conn:
         dataset_id = get_dataset_id(conn)
-        load_grib_file(conn, args.gribfile, dataset_id)
+        load_grib_file(conn, grib_path, dataset_id)
+
+    # cleanup
+    if input_path.endswith(".zip"):
+        os.remove(grib_path)
 
 if __name__ == "__main__":
     main()
