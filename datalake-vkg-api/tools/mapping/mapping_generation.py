@@ -190,7 +190,7 @@ def generate_mappings(
 
 def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema_name: str = "public", csv_filename: str | None = None, dremio_source_name: str | None = None):
     dataset_id = croissant_dict.get("@id", source_id).split(":")[-1]
-    _dremio_source = dremio_source_name or source_id
+    _dremio_source = dremio_source_name
     mappings = Graph()
     mappings.bind("rr", RR)
     extracted_schema = extract_schema(croissant_dict)
@@ -230,7 +230,7 @@ def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema
         elif mimeType == "text/sql":
             sql_query = (
                 f"SELECT * "
-                f'FROM "{ dremio_dataset_name }"."{ schema_name }"."{ table_name }"'
+                f'FROM "{ _dremio_source }"."{ schema_name }"."{ table_name }"'
             )
             mappings.add((logical_table, RR.sqlQuery, Literal(sql_query)))
         else:
@@ -240,7 +240,7 @@ def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema
         mappings.add((triples_map, RR.subjectMap, subject_map))
         mappings.add((subject_map, RDF.type, RR.SubjectMap))
         if details.get("primary_key") != []:
-            pk_template = "_".join(details.get("primary_key"))
+            pk_template = "_".join(details.get("primary_key_names"))
             mappings.add(
                 (
                     subject_map,
