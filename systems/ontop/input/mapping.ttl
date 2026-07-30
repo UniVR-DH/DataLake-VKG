@@ -12,9 +12,9 @@
             rr:sqlQuery "SELECT * FROM \"garage\".\"csv\".\"stations_list.csv\"" ] ;
     rr:predicateObjectMap [ a rr:PredicateObjectMap ;
             rr:objectMap [ a rr:ObjectMap ;
-                    rr:column "stations" ;
-                    rr:datatype xsd:string ] ;
-            rr:predicate <http://example.com/stations/stations_list#stations> ],
+                    rr:column "longitude" ;
+                    rr:datatype xsd:decimal ] ;
+            rr:predicate <http://example.com/stations/stations_list#longitude> ],
         [ a rr:PredicateObjectMap ;
             rr:objectMap [ a rr:ObjectMap ;
                     rr:column "altitude" ] ;
@@ -26,9 +26,9 @@
             rr:predicate <http://example.com/stations/stations_list#latitude> ],
         [ a rr:PredicateObjectMap ;
             rr:objectMap [ a rr:ObjectMap ;
-                    rr:column "longitude" ;
-                    rr:datatype xsd:decimal ] ;
-            rr:predicate <http://example.com/stations/stations_list#longitude> ] ;
+                    rr:column "stations" ;
+                    rr:datatype xsd:string ] ;
+            rr:predicate <http://example.com/stations/stations_list#stations> ] ;
     rr:subjectMap [ a rr:SubjectMap ;
             rr:class_ <http://example.com/stations/stations_list> ;
             rr:template "row" ;

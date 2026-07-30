@@ -148,10 +148,80 @@ services:
     networks:
       - ontop-network
 
+  postgres:
+    image: postgres:16
+    container_name: era5-postgres
+    environment:
+      POSTGRES_DB: era5land
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - era5_pgdata:/var/lib/postgresql/data
+      - ./systems/ontop/input/data/era_5_land.sql:/docker-entrypoint-initdb.d/era_5_land.sql:ro
+      - ./systems/ontop/input/data:/data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d era5land"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - ontop-network
+
+  loader:
+    build:
+      context: ./loader
+    container_name: era5-loader
+    mem_limit: 4g
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./systems/ontop/input/data:/data:ro
+    command:
+      - /data/era_5_land.zip
+      - --db
+      - host=postgres dbname=era5land user=postgres password=postgres
+    networks:
+      - ontop-network
+
+
+
+  dremio_postgres_source_init:
+    image: python:3.11-slim
+    container_name: dremio-postgres-source-init
+    working_dir: /scripts
+    command: ["sh", "-c", "pip install --no-cache-dir requests && python add-postgres-source.py"]
+    env_file:
+      - .env
+    environment:
+      DREMIO_HOST: dremio
+      DREMIO_ADMIN_USER: dremio
+      DREMIO_ADMIN_PASSWORD: dremio123
+      PG_HOST: postgres
+      PG_DATABASE: era5land
+      PG_USER: postgres
+      PG_PASSWORD: postgres
+    volumes:
+      - ./systems/dremio/add-postgres-source.py:/scripts/add-postgres-source.py:ro
+    depends_on:
+      dremio:
+        condition: service_healthy
+      dremio_init:
+        condition: service_completed_successfully
+      loader:
+        condition: service_completed_successfully
+    restart: "no"
+    networks:
+      - ontop-network
+
 volumes:
   dremio_data:
   garage_meta:
   garage_data:
+  era5_pgdata:
   garage_config:
   credentials:
 

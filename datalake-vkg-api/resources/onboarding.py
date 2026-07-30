@@ -31,36 +31,28 @@ async def onboard_dataset(source_name: str, mimeType:str, path: Optional[str] = 
     """
     if path is not None:
         path = path.strip()
-    mimeType = mimeType.strip()
     source_name = source_name.strip()
-    if mimeType not in ["text/csv", "application/parquet", "text/sql"]:
-        raise HTTPException(status_code=400, detail="Invalid MIME type. Accepted values are: 'text/csv', 'application/parquet', 'text/sql'.")
-    if mimeType == "text/csv" and not path.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="For MIME type 'text/csv', the path must end with '.csv'.")
-    if mimeType == "application/parquet" and not path.lower().endswith(".parquet"):
-        raise HTTPException(status_code=400, detail="For MIME type 'application/parquet', the path must end with '.parquet'.")
 
     ## Garage ingestion (only for CSV files)
-    if mimeType == "text/csv":
-        try:
-            target_bucket = os.getenv("GARAGE_CSV_BUCKET", "csv")
-            ontop_input = Path(os.getenv("ONTOP_INPUT_DIR", "/app/datalake_vkg_api/tools/ontop/input"))
-            raw = Path(path)
-            for prefix in ("systems/ontop/input/", "systems/ontop/input"):
-                if str(raw).startswith(prefix):
-                    raw = Path(str(raw)[len(prefix):].lstrip("/"))
-                    break
-            abs_file = raw if raw.is_absolute() else ontop_input / raw
-            file_data = abs_file.read_bytes()
-            upload_csv_response = await upload_csv_to_garage(file_data, abs_file.name, target_bucket)
-            if not upload_csv_response:  # or however success is signaled
-                raise HTTPException(status_code=500, detail="CSV upload to Garage failed")
-        except Exception as e:
-            logger.error("Failed to upload CSV to Garage: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to upload CSV to Garage")
+    try:
+        target_bucket = os.getenv("GARAGE_CSV_BUCKET", "csv")
+        ontop_input = Path(os.getenv("ONTOP_INPUT_DIR", "/app/datalake_vkg_api/tools/ontop/input"))
+        raw = Path(path)
+        for prefix in ("systems/ontop/input/", "systems/ontop/input"):
+            if str(raw).startswith(prefix):
+                raw = Path(str(raw)[len(prefix):].lstrip("/"))
+                break
+        abs_file = raw if raw.is_absolute() else ontop_input / raw
+        file_data = abs_file.read_bytes()
+        upload_csv_response = await upload_csv_to_garage(file_data, abs_file.name, target_bucket)
+        if not upload_csv_response:  # or however success is signaled
+            raise HTTPException(status_code=500, detail="CSV upload to Garage failed")
+    except Exception as e:
+        logger.error("Failed to upload CSV to Garage: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to upload CSV to Garage")
 
     ## Dremio ingestion
-    dremio_response = await add_dataset_to_dremio(source_name, mimeType, path)
+    dremio_response = await add_dataset_to_dremio(source_name, "text/csv", path)
     if dremio_response.status_code == 409:
         logger.warning(
             "Dataset already registered in Dremio for source_name=%s, skipping.",

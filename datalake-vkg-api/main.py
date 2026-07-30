@@ -67,36 +67,6 @@ def read_root():
                 "methods": ["GET"],
                 "url": "/api/v1/ontop/restart",
             },
-            # "ontop/ontology": {
-            #     "description": "Add a new ontology to ontop",
-            #     "methods": ["GET"],
-            #     "url": "/api/v1/ontop/ontology",
-            # },
-            # "ontop/mapping": {
-            #     "description": "Add a new mapping to ontop",
-            #     "methods": ["GET"],
-            #     "url": "/api/v1/ontop/mapping",
-            # },
-            # "ontop/properties": {
-            #     "description": "Get ontop properties",
-            #     "methods": ["GET"],
-            #     "url": "/api/v1/ontop/properties",
-            # },
-            # "ontop/lenses": {
-            #     "description": "Get ontop lenses",
-            #     "methods": ["GET"],
-            #     "url": "/api/v1/ontop/lenses",
-            # },
-            # "s3/upload": {
-            #     "description": "Upload files to S3",
-            #     "methods": ["POST"],
-            #     "url": "/api/v1/s3/upload",
-            # },
-            # "query/sparql": {
-            #     "description": "Execute SPARQL queries against the Ontop endpoint",
-            #     "methods": ["POST"],
-            #     "url": "/api/v1/query/sparql",
-            # },
         },
     }
 
