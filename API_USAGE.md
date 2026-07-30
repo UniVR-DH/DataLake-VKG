@@ -12,9 +12,9 @@ curl -X POST "http://localhost:5002/api/v1/garage/upload"   -F "file=@systems/on
 ```bash
 curl -X POST "http://localhost:5002/api/v1/dataset?source_name=stations&path=systems/ontop/input/data/stations_list.csv"
 ```
-
+## Generating mappigns file from croissant
 ```bash
-curl -X POST "http://localhost:5002/api/v1/dataset?source_name=era5land&mimeType=text/sql"
+curl -X POST "http://localhost:5002/api/v1/mappings?path=systems/ontop/input/croissant/era5_land.json"
 ```
 ## Croissant Generator
 ```bash

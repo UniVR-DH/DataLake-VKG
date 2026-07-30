@@ -181,7 +181,7 @@ services:
     volumes:
       - ./systems/ontop/input/data:/data:ro
     command:
-      - /data/era_5_land.zip
+      - /data/era_5_land.grib
       - --db
       - host=postgres dbname=era5land user=postgres password=postgres
     networks:

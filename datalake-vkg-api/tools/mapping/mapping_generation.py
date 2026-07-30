@@ -194,6 +194,7 @@ def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema
     mappings = Graph()
     mappings.bind("rr", RR)
     extracted_schema = extract_schema(croissant_dict)
+    logger.info("Extracted schema for source_id=%s: %s", source_id, extracted_schema)
     for index, (table, details) in enumerate(extracted_schema.items(), start=1):
         table_name = details.get("recordset_name", table)
         field_specs = []
@@ -501,6 +502,17 @@ def extract_schema(croissant_data):
     """
 
     for row in graph.query(core_query):
+        logger.info("Processing row: recordSet=%s, recordSetName=%s, field=%s, fieldName=%s, sourceColumn=%s, dataType=%s, sample=%s, pKey=%s, pKeyName=%s",
+            row.recordSet,
+            row.recordSetName,
+            row.field,
+            row.fieldName,
+            row.sourceColumn,
+            row.dataType,
+            row.sample,
+            row.pKey,
+            row.pKeyName,
+        )
         table_name = uuid_tail(row.recordSet)
         table_label = str(row.recordSetName) if row.recordSetName else table_name
         column_name = row.field

@@ -20,7 +20,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.post("/dataset", status_code=201, summary="Onboard a new dataset into the system")
-async def onboard_dataset(source_name: str, mimeType:str, path: Optional[str] = None):
+async def onboard_dataset(source_name: str, path: Optional[str] = None):
     """
     Onboard a new dataset into Dremio.
 
@@ -69,7 +69,7 @@ async def onboard_dataset(source_name: str, mimeType:str, path: Optional[str] = 
     ## Croissant generation
     croissant = await generate_croissant(path, f"Croissant ontology for {source_name}")
     try: 
-        croissant_text = (Path(os.getenv("ONTOP_INPUT_DIR", "/app/datalake_vkg_api/tools/ontop/input")) / "croissant" / (Path(path).stem + ".ttl")).read_text()
+        croissant_text = (Path(os.getenv("ONTOP_INPUT_DIR", "/app/datalake_vkg_api/tools/ontop/input")) / "croissant" / (Path(path).stem + ".json")).read_text()
         croissant_dict = json.loads(croissant_text)
     except Exception as e:
         logger.error("Failed to read Croissant profile: %s", e)
@@ -77,8 +77,8 @@ async def onboard_dataset(source_name: str, mimeType:str, path: Optional[str] = 
     
     ## Mapping and ontology generation
     try:
-        csv_filename = Path(path).name if mimeType == "text/csv" else None
-        generate_mappings(croissant_dict, source_name, mimeType, "public", csv_filename=csv_filename, dremio_source_name=source_name)
+        csv_filename = Path(path).name
+        generate_mappings(croissant_dict, source_name, "text/csv", "public", csv_filename=csv_filename, dremio_source_name=source_name)
     except Exception as e:
         logger.error("Failed to generate mappings and ontology: %s", e)
         raise HTTPException(status_code=500, detail="Failed to generate mappings and ontology")
@@ -161,7 +161,7 @@ async def generate_croissant(
 
     input_dir = str(abs_file.parent)
     stem = abs_file.stem
-    output_path = str(ontop_input / "croissant" / (stem + ".ttl"))
+    output_path = str(ontop_input / "croissant" / (stem + ".json"))
 
     try: 
         subprocess.run([
@@ -226,3 +226,27 @@ async def execute_sparql_query(
         )
 
     return resp.json()
+
+@router.post("/mappings")
+async def generate_mappings_endpoint(
+    path: str,
+):
+    """Endpoint to generate mappings based on the provided path to a Croissant profile and dataset information."""
+
+    try: 
+        croissant_text = (Path(os.getenv("ONTOP_INPUT_DIR", "/app/datalake_vkg_api/tools/ontop/input")) / "croissant" / (Path(path).stem + ".json")).read_text()
+        logger.info("Croissant profile: %s", croissant_text)
+        croissant_dict = json.loads(croissant_text)
+    except Exception as e:
+        logger.error("Failed to read Croissant profile: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to read Croissant profile")
+    
+    ## Mapping and ontology generation
+    try:
+        source_name = Path(path).stem  # Use the filename without extension as source_name
+        generate_mappings(croissant_dict, source_name, "text/sql", "public", csv_filename=source_name, dremio_source_name="era5_postgres")
+    except Exception as e:
+        logger.error("Failed to generate mappings and ontology: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to generate mappings and ontology")
+    
+    return {"message": f"Mappings and ontology correctly generated."}

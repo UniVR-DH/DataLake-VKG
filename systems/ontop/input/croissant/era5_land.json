@@ -1,0 +1,401 @@
+{
+  "@context": {
+    "@language": "en",
+    "@vocab": "https://schema.org/",
+    "citeAs": "cr:citeAs",
+    "column": "cr:column",
+    "conformsTo": "dct:conformsTo",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "data": {
+      "@id": "cr:data",
+      "@type": "@json"
+    },
+    "dataType": {
+      "@id": "cr:dataType",
+      "@type": "@vocab"
+    },
+    "dct": "http://purl.org/dc/terms/",
+    "equivalentProperty": "cr:equivalentProperty",
+    "examples": {
+      "@id": "cr:examples",
+      "@type": "@json"
+    },
+    "extract": "cr:extract",
+    "field": "cr:field",
+    "fileProperty": "cr:fileProperty",
+    "fileObject": "cr:fileObject",
+    "fileSet": "cr:fileSet",
+    "format": "cr:format",
+    "includes": "cr:includes",
+    "isLiveDataset": "cr:isLiveDataset",
+    "jsonPath": "cr:jsonPath",
+    "key": "cr:key",
+    "md5": "cr:md5",
+    "parentField": "cr:parentField",
+    "path": "cr:path",
+    "recordSet": "cr:recordSet",
+    "references": "cr:references",
+    "regex": "cr:regex",
+    "repeated": "cr:repeated",
+    "replace": "cr:replace",
+    "samplingRate": "cr:samplingRate",
+    "sc": "https://schema.org/",
+    "separator": "cr:separator",
+    "source": "cr:source",
+    "subField": "cr:subField",
+    "transform": "cr:transform"
+  },
+  "@id": "era5_land",
+  "name": "ERA5-Land Point-Based Weather Dataset",
+  "description": "Point-based ERA5-Land dataset including temperature and precipitation values.",
+  "@type": "sc:Dataset",
+  "distribution": [
+    {
+      "@id": "era5_dataset",
+      "@type": "cr:FileObject",
+      "contentUrl": "era5_postgres.public.era5_dataset",
+      "name": "era5_dataset",
+      "description": "ERA5-Land dataset.",
+      "encodingFormat": "text/sql"
+    },
+    {
+      "@id": "weather_variable",
+      "@type": "cr:FileObject",
+      "contentUrl": "era5_postgres.public.weather_variable",
+      "name": "weather_variable",
+      "description": "ERA5-Land weather variable definitions.",
+      "encodingFormat": "text/sql"
+    },
+    {
+      "@id": "weather_point",
+      "@type": "cr:FileObject",
+      "contentUrl": "era5_postgres.public.weather_point",
+      "name": "weather_point",
+      "description": "ERA5-Land weather point definitions.",
+      "encodingFormat": "text/sql"
+    },
+    {
+      "@id": "weather_point_t2m",
+      "@type": "cr:FileObject",
+      "contentUrl": "era5_postgres.public.weather_point_t2m",
+      "name": "weather_point_t2m",
+      "description": "ERA5-Land weather point definitions for t2m variable.",
+      "encodingFormat": "text/sql"
+    },
+    {
+      "@id": "weather_point_tp",
+      "@type": "cr:FileObject",
+      "contentUrl": "era5_postgres.public.weather_point_tp",
+      "name": "weather_point_tp",
+      "description": "ERA5-Land weather point definitions for tp variable.",
+      "encodingFormat": "text/sql"
+    }
+  ],
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "era5_dataset_recordset",
+      "name": "era5_dataset",
+      "description": "Metadata describing ERA5-Land monthly dataset partitions.",
+      "key": { "@id": "era5_dataset_id" },
+      
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "era5_dataset_id",
+          "name": "id",
+          "description": "Attribute 'id' from era5_dataset table.",
+          "source": {
+            "fileObject": {
+              "@id": "era5_dataset"
+            },
+            "extract": {
+              "column": "id"
+            }
+          },
+          "dataType": "xsd:integer"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "era5_dataset_source",
+          "name": "source",
+          "description": "Attribute 'source' from era5_dataset table.",
+          "source": {
+            "fileObject": {
+              "@id": "era5_dataset"
+            },
+            "extract": {
+              "column": "source"
+            }
+          },
+          "dataType": "xsd:string"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "era5_dataset_year",
+          "name": "year",
+          "description": "Attribute 'year' from era5_dataset table.",
+          "source": {
+            "fileObject": {
+              "@id": "era5_dataset"
+            },
+            "extract": {
+              "column": "year"
+            }
+          },
+          "dataType": "xsd:integer"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "era5_dataset_month",
+          "name": "month",
+          "description": "Attribute 'month' from era5_dataset table.",
+          "source": {
+            "fileObject": {
+              "@id": "era5_dataset"
+            },
+            "extract": {
+              "column": "month"
+            }
+          },
+          "dataType": "xsd:integer"
+        }
+      ]
+    },
+    {
+      "@id": "weather_variable_recordset",
+      "@type": "cr:RecordSet",
+      "name": "weather_variable",
+      "key": { "@id": "weather_variable_id" },
+
+      "description": "Weather variable definitions (t2m, tp).",
+      
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "weather_variable_id",
+          "name": "id",
+          "description": "Attribute 'id' from weather_variable table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_variable"
+            },
+            "extract": {
+              "column": "id"
+            }
+          },
+          "dataType": "xsd:integer"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "weather_variable_short_name",
+          "name": "short_name",
+          "description": "Attribute 'short_name' from weather_variable table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_variable"
+            },
+            "extract": {
+              "column": "short_name"
+            }
+          },
+          "dataType": "xsd:string"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "weather_variable_description",
+          "name": "description",
+          "description": "Attribute 'description' from weather_variable table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_variable"
+            },
+            "extract": {
+              "column": "description"
+            }
+          },
+          "dataType": "xsd:string"
+        }
+      ]
+    },
+    {
+      "@id": "weather_point_recordset",
+      "@type": "cr:RecordSet",
+      "name": "weather_point",
+      "description": "Spatiotemporal points for ERA5-Land variables.",
+      "key": { "@id": "weather_point_id" },
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "weather_point_id",
+          "name": "id",
+          "description": "Attribute 'id' from weather_point table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_point"
+            },
+            "extract": {
+              "column": "id"
+            }
+          },
+          "dataType": "xsd:integer"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "weather_point_dataset_id",
+          "name": "dataset_id",
+          "description": "Attribute 'dataset_id' from weather_point table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_point"
+            },
+            "extract": {
+              "column": "dataset_id"
+            }
+          },
+          "dataType": "xsd:integer"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "weather_point_variable_id",
+          "name": "variable_id",
+          "description": "Attribute 'variable_id' from weather_point table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_point"
+            },
+            "extract": {
+              "column": "variable_id"
+            }
+          },
+          "dataType": "xsd:integer"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "weather_point_valid_time",
+          "name": "valid_time",
+          "description": "Attribute 'valid_time' from weather_point table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_point"
+            },
+            "extract": {
+              "column": "valid_time"
+            }
+          },
+          "dataType": "xsd:dateTime"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "weather_point_lat",
+          "name": "lat",
+          "description": "Attribute 'lat' from weather_point table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_point"
+            },
+            "extract": {
+              "column": "lat"
+            }
+          },
+          "dataType": "xsd:double"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "weather_point_lon",
+          "name": "lon",
+          "description": "Attribute 'lon' from weather_point table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_point"
+            },
+            "extract": {
+              "column": "lon"
+            }
+          },
+          "dataType": "xsd:double"
+        }
+      ]
+    },
+
+    {
+      "@id": "weather_point_t2m_recordset",
+      "@type": "cr:RecordSet",
+      "name": "weather_point_t2m",
+      "description": "2m temperature values for each weather point.",
+      "key": { "@id": "weather_point_t2m_point_id" },
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "weather_point_t2m_point_id",
+          "name": "point_id",
+          "description": "Attribute 'point_id' from weather_point_t2m table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_point_t2m"
+            },
+            "extract": {
+              "column": "point_id"
+            }
+          },
+          "dataType": "xsd:integer"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "weather_point_t2m_value",
+          "name": "value",
+          "description": "Attribute 'value' from weather_point_t2m table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_point_t2m"
+            },
+            "extract": {
+              "column": "value"
+            }
+          },
+          "dataType": "xsd:double"
+        }
+      ]
+    },
+    {
+      "@id": "weather_point_tp_recordset",
+      "@type": "cr:RecordSet",
+      "name": "weather_point_tp",
+      "description": "Total precipitation values for each weather point.",
+      "key": { "@id": "weather_point_tp_point_id" },
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "weather_point_tp_point_id",
+          "name": "point_id",
+          "description": "Attribute 'point_id' from weather_point_tp table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_point_tp"
+            },
+            "extract": {
+              "column": "point_id"
+            }
+          },
+          "dataType": "xsd:integer"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "weather_point_tp_value",
+          "name": "value",
+          "description": "Attribute 'value' from weather_point_tp table.",
+          "source": {
+            "fileObject": {
+              "@id": "weather_point_tp"
+            },
+            "extract": {
+              "column": "value"
+            }
+          },
+          "dataType": "xsd:double"
+        }
+      ]
+    }
+  ]
+}
