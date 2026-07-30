@@ -190,11 +190,11 @@ def generate_mappings(
 
 def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema_name: str = "public", csv_filename: str | None = None, dremio_source_name: str | None = None):
     dataset_id = croissant_dict.get("@id", source_id).split(":")[-1]
-    _dremio_source = dremio_source_name
+    _dremio_source = dremio_source_name 
     mappings = Graph()
     mappings.bind("rr", RR)
     extracted_schema = extract_schema(croissant_dict)
-    logger.info("Extracted schema for source_id=%s: %s", source_id, extracted_schema)
+    # logger.info("Extracted schema for source_id=%s: %s", source_id, extracted_schema)
     for index, (table, details) in enumerate(extracted_schema.items(), start=1):
         table_name = details.get("recordset_name", table)
         field_specs = []
@@ -240,13 +240,15 @@ def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema
         mappings.add((triples_map, RR.subjectMap, subject_map))
         mappings.add((subject_map, RDF.type, RR.SubjectMap))
         if details.get("primary_key") != []:
-            pk_template = "_".join(details.get("primary_key_names"))
+            pk_names = details["primary_key_names"]
+            pk_column_names = list(pk_names.values())
+            pk_template = "_".join("{" + name + "}" for name in pk_column_names)            
             mappings.add(
                 (
                     subject_map,
                     RR.template,
                     Literal(
-                        f"http://example.com/{dataset_id}/{table_name}/{{{pk_template}}}"
+                        f"http://example.com/{dataset_id}/{table_name}/{pk_template}"
                     ),
                 )
             )

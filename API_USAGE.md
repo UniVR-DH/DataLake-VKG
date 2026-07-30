@@ -3,7 +3,6 @@
 curl -X POST "http://localhost:5002/api/v1/garage/upload"   -F "file=@systems/ontop/input/data/stations_list.csv"
 ```
 
-
 ## CSV Dataset Onboarding
 1) Ingestion into Garage
 2) Ingestion into Dremio
