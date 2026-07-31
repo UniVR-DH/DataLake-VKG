@@ -150,6 +150,27 @@ def merge_ontology_files() -> None:
     with open(ONTOLOGY_FILE, "w") as f:
         f.write(merged.serialize(format="turtle"))
 
+def merge_lenses_files() -> None:
+    """Merge all lenses/*.json files into one lenses.json with a single 'relations' list."""
+    json_files = sorted(LENSES_DIR.glob("*.json"))
+    if not json_files:
+        logger.warning("No .json files found in %s, skipping merge", LENSES_DIR)
+        return
+
+    merged_relations = []
+
+    for json_file in json_files:
+        with open(json_file, "r") as f:
+            data = json.load(f)
+
+        # Each file contains: { "relations": [ ... ] }
+        relations = data.get("relations", [])
+        merged_relations.extend(relations)
+
+    with open(LENSES_FILE, "w") as f:
+        json.dump({"relations": merged_relations}, f, indent=2)
+
+
 
 def generate_mappings(
     croissant_dict, source_id: str, mimeType: str, schema_name: str = "public", csv_filename: str | None = None, dremio_source_name: str | None = None
@@ -159,18 +180,22 @@ def generate_mappings(
     total_start = time.perf_counter()
 
     ontology_start = time.perf_counter()
-    ontology = generate_ontology(croissant_dict, source_id, schema_name)
+    extracted_schema = extract_schema(croissant_dict)
+    ontology = generate_ontology(croissant_dict, extracted_schema, source_id, schema_name)
     ontology_elapsed = time.perf_counter() - ontology_start
     logger.info(
         "Ontology generation took %.3fs for source_id=%s", ontology_elapsed, source_id
     )
 
     mappings_start = time.perf_counter()
-    mappings = generate_mappings_file(croissant_dict, source_id, mimeType, schema_name, csv_filename=csv_filename, dremio_source_name=dremio_source_name)
+    mappings = generate_mappings_file(croissant_dict, extracted_schema, source_id, mimeType, schema_name, csv_filename=csv_filename, dremio_source_name=dremio_source_name)
     mappings_elapsed = time.perf_counter() - mappings_start
     logger.info(
         "Mapping generation took %.3fs for source_id=%s", mappings_elapsed, source_id
     )
+
+    lenses = generate_lenses_file(croissant_dict, extracted_schema, source_id, mimeType, schema_name, csv_filename=csv_filename, dremio_source_name=dremio_source_name)
+    
 
     total_elapsed = time.perf_counter() - total_start
     logger.info(
@@ -180,21 +205,61 @@ def generate_mappings(
     )
     target_mapping_path = MAPPINGS_DIR / f"{source_id}.ttl"
     target_ontology_path = ONTOLOGIES_DIR / f"{source_id}.ttl"
+    target_lenses_path = LENSES_DIR / f"{source_id}.json"
 
     ## Saving files into the respective repositories
     with open(target_mapping_path, "w") as f:
         f.write(mappings.serialize(format="turtle"))
     with open(target_ontology_path, "w") as f:
         f.write(ontology.serialize(format="turtle"))
+    if lenses is not None:
+        with open(target_lenses_path, "w") as f:
+            json.dump(lenses, f, indent=2)
 
+def generate_lenses_file(croissant_dict, extracted_schema, source_id: str, mimeType: str, schema_name: str = "public", csv_filename: str | None = None, dremio_source_name: str | None = None):
+    dataset_id = croissant_dict.get("@id", source_id).split(":")[-1]
+    lenses = {"relations": []}
+    for table, details in extracted_schema.items():
+        if isBinaryTable(table, details):
+            continue
+        primary_keys = details.get("primary_key", [])
+        if not primary_keys:
+            continue
+        # Collect all PK names
+        determinants = []
+        for pk in primary_keys:
+            pk_name = details.get("primary_key_names", {}).get(pk, pk)
+            safe_pk_name = _sanitize_field_name(pk_name)
+            determinants.append(safe_pk_name)
+        # Build unique constraint name
+        uc_name = f"{source_id}_{table}_uc"
+        table_name = details.get("recordset_name", table)
 
-def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema_name: str = "public", csv_filename: str | None = None, dremio_source_name: str | None = None):
+        relation = {
+            "name": ["lenses", f'"{source_id}"', f'"{table_name}"'],
+            "baseRelation": [f'"{dremio_source_name}"', f'"{schema_name}"', f'"{table_name}"'],
+            "type": "BasicLens",
+            "uniqueConstraints": {
+                "added": [
+                    {
+                        "name": uc_name,
+                        "determinants": determinants,
+                    }
+                ]
+            },
+        }
+        lenses["relations"].append(relation)
+
+    target_lenses_path = LENSES_DIR / f"{source_id}.json"
+    with open(target_lenses_path, "w") as f:
+        json.dump(lenses, f, indent=2)
+
+def generate_mappings_file(croissant_dict, extracted_schema, source_id: str, mimeType: str, schema_name: str = "public", csv_filename: str | None = None, dremio_source_name: str | None = None):
     dataset_id = croissant_dict.get("@id", source_id).split(":")[-1]
     _dremio_source = dremio_source_name 
     mappings = Graph()
     mappings.bind("rr", RR)
-    extracted_schema = extract_schema(croissant_dict)
-    # logger.info("Extracted schema for source_id=%s: %s", source_id, extracted_schema)
+    logger.info("Extracted schema for source_id=%s: %s", source_id, extracted_schema)
     for index, (table, details) in enumerate(extracted_schema.items(), start=1):
         table_name = details.get("recordset_name", table)
         field_specs = []
@@ -223,19 +288,6 @@ def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema
         mappings.add((triples_map, RR.logicalTable, logical_table))
         mappings.add((logical_table, RDF.type, RR.LogicalTable))
         dremio_dataset_name = _get_dremio_dataset_name(source_id)
-        if mimeType == "text/csv":
-            filename = csv_filename or f"{source_id}.csv"
-            sql_query = f'SELECT * FROM "{S3_SOURCE_NAME}"."{GARAGE_CSV_BUCKET}"."{filename}"'
-            mappings.add((logical_table, RR.sqlQuery, Literal(sql_query)))
-        elif mimeType == "text/sql":
-            sql_query = (
-                f"SELECT * "
-                f'FROM "{ _dremio_source }"."{ schema_name }"."{ table_name }"'
-            )
-            mappings.add((logical_table, RR.sqlQuery, Literal(sql_query)))
-        else:
-            raise ValueError(f"Unsupported mimeType: {mimeType}")
-
         subject_map = BNode()
         mappings.add((triples_map, RR.subjectMap, subject_map))
         mappings.add((subject_map, RDF.type, RR.SubjectMap))
@@ -252,10 +304,24 @@ def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema
                     ),
                 )
             )
+            sql_query = f'SELECT {", ".join(projection_sql)} FROM "lenses"."{source_id}"."{table_name}"'
+            mappings.add((logical_table, RR.sqlQuery, Literal(sql_query)))
 
         else:
             mappings.add((subject_map, RR.termType, RR.BlankNode))
             mappings.add((subject_map, RR.template, Literal("row")))
+            if mimeType == "text/csv":
+                filename = csv_filename or f"{source_id}.csv"
+                sql_query = f'SELECT * FROM "{S3_SOURCE_NAME}"."{GARAGE_CSV_BUCKET}"."{filename}"'
+                mappings.add((logical_table, RR.sqlQuery, Literal(sql_query)))
+            elif mimeType == "text/sql":
+                sql_query = (
+                    f"SELECT * "
+                    f'FROM "{ _dremio_source }"."{ schema_name }"."{ table_name }"'
+                )
+                mappings.add((logical_table, RR.sqlQuery, Literal(sql_query)))
+            else:
+                raise ValueError(f"Unsupported mimeType: {mimeType}")
 
         mappings.add(
             (
@@ -264,6 +330,8 @@ def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema
                 URIRef(f"http://example.com/{dataset_id}/{table_name}"),
             )
         )
+        
+        
         for field_spec in field_specs:
             field_name = field_spec["field_name"]
             predicate_object_map = BNode()
@@ -288,14 +356,13 @@ def generate_mappings_file(croissant_dict, source_id: str, mimeType: str, schema
     return mappings
 
 
-def generate_ontology(croissant_dict, source_id: str, schema_name: str = "public"):
+def generate_ontology(croissant_dict, extracted_schema, source_id: str, schema_name: str = "public"):
     dataset_id = croissant_dict.get("@id", source_id).split(":")[-1]
     croissant_graph = Graph()
     croissant_graph.parse(data=json.dumps(croissant_dict), format="json-ld")
     ontology = Graph()
     ontology.bind("ex", EX)
 
-    extracted_schema = extract_schema(croissant_dict)
     # Generation of the classes in the ontology
     for table, details in extracted_schema.items():
         recordset_name = details.get("recordset_name", table)
@@ -504,17 +571,6 @@ def extract_schema(croissant_data):
     """
 
     for row in graph.query(core_query):
-        logger.info("Processing row: recordSet=%s, recordSetName=%s, field=%s, fieldName=%s, sourceColumn=%s, dataType=%s, sample=%s, pKey=%s, pKeyName=%s",
-            row.recordSet,
-            row.recordSetName,
-            row.field,
-            row.fieldName,
-            row.sourceColumn,
-            row.dataType,
-            row.sample,
-            row.pKey,
-            row.pKeyName,
-        )
         table_name = uuid_tail(row.recordSet)
         table_label = str(row.recordSetName) if row.recordSetName else table_name
         column_name = row.field

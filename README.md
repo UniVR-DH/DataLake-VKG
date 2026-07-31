@@ -6,7 +6,6 @@ This folder is a running example outside the DataGEMS platform. The full deploye
 ## Services
 * Dremio: http://localhost:9047
 * Ontop endpoint: 
-* 
 
 docker-compose build api && docker-compose up -d api
 

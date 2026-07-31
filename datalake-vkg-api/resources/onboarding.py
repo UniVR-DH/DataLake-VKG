@@ -12,7 +12,7 @@ import time
 
 from datalake_vkg_api.tools.setup.dremio import add_dataset_to_dremio
 from datalake_vkg_api.tools.setup.garage import upload_csv_to_garage 
-from datalake_vkg_api.tools.mapping.mapping_generation import generate_mappings, merge_mapping_files, merge_ontology_files
+from datalake_vkg_api.tools.mapping.mapping_generation import generate_mappings, merge_mapping_files, merge_ontology_files, merge_lenses_files
 from datalake_vkg_api.resources.constants import ONTOP_SPARQL_URL, SparqlRequest
 
 router = APIRouter()
@@ -189,6 +189,7 @@ async def restart_ontop():
     
     merge_mapping_files()
     merge_ontology_files()
+    merge_lenses_files()
     try:
         client = docker.from_env()
         container = client.containers.get("ontop-endpoint")
