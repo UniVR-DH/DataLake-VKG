@@ -177,7 +177,7 @@ async def generate_croissant(
         raise HTTPException(status_code=500, detail="Croissant generation failed")
 
 
-@router.get(
+@router.post(
     "/ontop/restart",
     status_code=200,
     summary="Restart the Ontop server with new mappings and ontologies",

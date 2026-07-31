@@ -1,37 +1,61 @@
 # DataLake-VKG
 
-Virtual Knowledge Graph for Data Lakes using Ontop associated with the Data Federator Dremio. 
-This folder is a running example outside the DataGEMS platform. The full deployed version is the following: https://github.com/datagems-eosc/virtual-data-catalog
+DataLake-VKG provides a reproductible environment for constructing a Virtual Knowledge Graph (VKG) over heterogeneous data sources. 
+The system integrates the Ontop system associated with the Dremio data federator. This repository contains a standalone demonstrator independent of the DataGEMS platform. The fully deployed version is available at: https://github.com/datagems-eosc/virtual-data-catalog
 
 License: [LICENSE](LICENSE)
 
-## Services
-The compose stack includes the following services:
 
-| Service | Purpose | Compose build command |
-| --- | --- | --- |
-| API | FastAPI onboarding and SPARQL API | docker compose build api |
-| loader | ERA5 dataset loader | docker compose build loader |
-| ontop | Ontop SPARQL endpoint | No build required; image-based service |
-| garage | Garage S3-compatible object store | No build required; image-based service |
-| garage_config | Generates Garage configuration | No build required; helper service |
-| garage_init | Creates the Garage bucket and credentials | No build required; helper service |
-| dremio | Dremio data federation engine | No build required; image-based service |
-| dremio_init | Applies initial Dremio configuration | No build required; helper service |
-| dremio_postgres_source_init | Adds the PostgreSQL source to Dremio | No build required; helper service |
-| postgres | PostgreSQL source for ERA5 data | No build required; image-based service |
+## Architecture and Services
 
-To build the local images and start the API service:
 
+API → Ontop → Dremio → {PostgreSQL, Garage}
+
+
+
+| Service | Purpose | Description | Endpoint |
+| --- | --- | --- | --- |
+| API | FastAPI onboarding and SPARQL API | Dataset onboarding, Mapping, ontology and lenses file generation and SPARQL access| |
+| ontop | Ontop SPARQL endpoint | VKG system | http://localhost:8080 |
+| dremio | Dremio data federation engine | Data federator to access postgres dataset and csv files | http://localhost:9047 |
+| garage | Garage S3-compatible object store |  S3-compatible object storage | |
+| postgres | PostgreSQL source for ERA5 data | ERA 5 land relational data source | |
+
+## Prerequisites
+
+The execution of the DataLake‑VKG environment requires the following software components:
+
+- **Docker** (version 20.10 or later)
+- **Docker Compose** (version 2.0 or later)
+- **Git** for cloning the repository
+- **Python 3.10+** (optional; required only for local API development or dataset preprocessing)
+
+All services are containerized; therefore, no additional system‑level dependencies are required.  
+Adequate memory (≥ 8 GB) is recommended to ensure stable execution of Dremio and Ontop.
+
+## Quick Start
+
+The following steps provide a minimal procedure for deploying the core components of the DataLake‑VKG stack.
+
+1. **Clone the repository**
 ```bash
-docker compose build api loader
-docker compose up -d api
+git clone https://github.com/UniVR-DH/DataLake-VKG.git
+cd DataLake-VKG
 ```
 
-Useful endpoints:
+2. **Build the required images**
+```bash
+docker-compose build 
+```
 
-* Dremio: http://localhost:9047
-* Ontop endpoint: http://localhost:8080
+3. **Start the services**
+```bash
+docker-compose up -d 
+```
+
+4. **Access the system interfaces**
+- Dremio Web Interface: http://localhost:9047
+- Ontop SPARQL Endpoint: http://localhost:8080
 
 ## API Usage 
 The use of the API is described in https://github.com/UniVR-DH/DataLake-VKG/blob/main/API_USAGE.md

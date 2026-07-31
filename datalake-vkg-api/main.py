@@ -64,7 +64,7 @@ def read_root():
             }, 
             "ontop/restart": {
                 "description": "Restart the Ontop server to apply new mappings and ontologies",
-                "methods": ["GET"],
+                "methods": ["POST"],
                 "url": "/api/v1/ontop/restart",
             },
         },
