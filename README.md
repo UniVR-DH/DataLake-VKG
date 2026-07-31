@@ -60,3 +60,11 @@ docker-compose up -d
 
 ## API Usage 
 The use of the API is described in https://github.com/UniVR-DH/DataLake-VKG/blob/main/API_USAGE.md
+
+## Data Sources
+- ERA5-Land dataset: [https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land?tab=download](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land?tab=download)
+License: The ERA5-Land dataset is provided under the terms specified by the
+Copernicus Climate Change Service (C3S) and the Copernicus Climate Data Store.
+
+- Climpact.gr dataset: [https://data.climpact.gr/dataset/497dc26d-45e0-4ad5-b8f3-5f8890f65129](https://data.climpact.gr/dataset/497dc26d-45e0-4ad5-b8f3-5f8890f65129)
+License: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
