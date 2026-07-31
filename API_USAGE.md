@@ -40,7 +40,7 @@ curl -X POST "http://localhost:5002/api/v1/mappings?path=systems/ontop/input/cro
 ```
 
 Notes: 
-- The Croissant file must contain valid datatypes for all fields.
+- The Croissant file must contain valid datatypes for all fields. See: [https://docs.mlcommons.org/croissant/docs/croissant-spec-1.1.html](https://docs.mlcommons.org/croissant/docs/croissant-spec-1.1.html)
 
 ## 3) Generating Croissant Metadata
 Croissant metadata can be generated directly from a CSV file. This endpoint is using the Croissant Baker tool: https://github.com/MIT-LCP/croissant-baker
@@ -55,7 +55,7 @@ curl -X POST "http://localhost:5002/api/v1/croissant?path=systems/ontop/input/da
 ```
 
 ## 4) Restarting Ontop
-When new mappings, ontology and lenses files are generating, Ontop needs to be restarted so the datasets can be queried. 
+When new mappings, ontology and lenses files are generated, Ontop needs to be restarted so the datasets can be queried. 
 To restart Ontop, the following query should be executed:  
 ```bash
 curl -X POST "http://localhost:5002/api/v1/ontop/restart"

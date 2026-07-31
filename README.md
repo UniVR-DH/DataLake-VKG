@@ -17,10 +17,10 @@ API → Ontop → Dremio → {PostgreSQL, Garage}
 | Service | Purpose | Description | Endpoint |
 | --- | --- | --- | --- |
 | API | FastAPI onboarding and SPARQL API | Dataset onboarding, Mapping, ontology and lenses file generation and SPARQL access| |
-| ontop | Ontop SPARQL endpoint | VKG system | http://localhost:8080 |
-| dremio | Dremio data federation engine | Data federator to access postgres dataset and csv files | http://localhost:9047 |
-| garage | Garage S3-compatible object store |  S3-compatible object storage | |
-| postgres | PostgreSQL source for ERA5 data | ERA 5 land relational data source | |
+| [ontop](https://ontop-vkg.org/) | Ontop SPARQL endpoint | VKG system | http://localhost:8080 |
+| [dremio](https://www.dremio.com/) | Dremio data federation engine | Data federator to access postgres dataset and csv files | http://localhost:9047 |
+| [garage](https://garagehq.deuxfleurs.fr/) | Garage S3-compatible object store |  S3-compatible object storage | |
+| [postgres](https://www.postgresql.org/) | PostgreSQL source for ERA5 data | ERA 5 land relational data source | |
 
 ## Prerequisites
 
