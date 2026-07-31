@@ -1,7 +1,8 @@
 # DataLake-VKG
 
 DataLake-VKG provides a reproductible environment for constructing a Virtual Knowledge Graph (VKG) over heterogeneous data sources. 
-The system integrates the Ontop system associated with the Dremio data federator. This repository contains a standalone demonstrator independent of the DataGEMS platform. The fully deployed version is available at: https://github.com/datagems-eosc/virtual-data-catalog
+The system integrates the Ontop system with the Dremio data federator.
+This repository contains a standalone demonstrator independent of the DataGEMS platform. The fully deployed version is available at: https://github.com/datagems-eosc/virtual-data-catalog
 
 License: [LICENSE](LICENSE)
 
@@ -54,7 +55,7 @@ docker-compose up -d
 ```
 
 4. **Access the system interfaces**
-- Dremio Web Interface: http://localhost:9047
+- Dremio Web Interface: http://localhost:9047 
 - Ontop SPARQL Endpoint: http://localhost:8080
 
 ## API Usage 
